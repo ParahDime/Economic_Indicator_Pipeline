@@ -1,0 +1,6 @@
+decide program flow
+
+sql_utils - create data
+
+https://uk.investing.com/indices/uk-100-historical-data
+link to download data
