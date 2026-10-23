@@ -39,8 +39,8 @@ def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
         df = df.dropna(how="all").dropna(axis=1, how="all")
         df = df.drop_duplicates()
 
-        #remove columns older than 01/01/2000
-        #row date changed
+        df["date changed"] = pd.to_datetime(df["date changed"], errors="coerce", dayfirst=True)
+        df = df[df["Date"] >= "2000-01-01"] #keep only data necessary
         
         #other column missing, avg previous and future 7 days
 
@@ -62,9 +62,10 @@ def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
             
         df = df.dropna(how="all").dropna(axis=1, how="all")
         df = df.drop_duplicates()
-    
-            #remove columns older than 01/01/2000
-            #row date changed
+
+        #ensure data is only taken after 1st jan 2000
+        df["date changed"] = pd.to_datetime(df["date changed"], errors="coerce", dayfirst=True)
+        df = df[df["date changed"] >= "2000-01-01"] #keep only data necessary
             
             #other column missing, avg previous and future 7 days
     

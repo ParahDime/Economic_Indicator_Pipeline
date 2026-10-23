@@ -1,5 +1,7 @@
 /datasets
 /reports
 /git
+/_pycache_
+/__pycache__
 
 todo.txt

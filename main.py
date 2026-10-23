@@ -46,9 +46,8 @@ def main():
         datasets[clean_name] = openData(path)
 
     #clean the data
-    """ Check and verify call"""
-    datasets["ftse100_daily_history"] = sanitise(datasets["ftse100_daily_history"])
-    datasets["boe_interest_rates"] = sanitise(datasets["boe_interest_rates"])
+    datasets["ftse100_daily_history"] = clean_ftse(datasets["ftse100_daily_history"])
+    datasets["boe_interest_rates"] = clean_boe(datasets["boe_interest_rates"])
     datasets["staging_ons_cpi_clean"] = clean_ons(datasets["staging_ons_cpi_clean"])
 
     report_missing(datasets["boe_interest_rates"])
