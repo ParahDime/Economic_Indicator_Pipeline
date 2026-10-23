@@ -1,13 +1,16 @@
 from pathlib import Path
 import sqlite3
 import pandas as pd
-
+import sys
 
 from data_utils import load_data, sanitise, report_missing, clean_ftse, clean_ons, clean_boe
 #from sql_utils
 
 DB_FOLDER = Path("databases")
 DB_FOLDER.mkdir(parents=True, exist_ok=True)
+
+DS_FOLDER = Path("datasets")
+DS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 
 
@@ -40,13 +43,15 @@ def main():
 
         #clean data
         clean_name = name_mapping.get(raw_key, raw_key)
-        datasets[clean_name] = load_data(path)
+        datasets[clean_name] = openData(path)
 
     #clean the data
     """ Check and verify call"""
-    datasets["ftse100_daily_history"] = clean_ftse(datasets["ftse100_daily_history"])
+    datasets["ftse100_daily_history"] = sanitise(datasets["ftse100_daily_history"])
+    datasets["boe_interest_rates"] = sanitise(datasets["boe_interest_rates"])
     datasets["staging_ons_cpi_clean"] = clean_ons(datasets["staging_ons_cpi_clean"])
-    datasets["boe_interest_rates"] = clean_boe(datasets["boe_interest_rates"])
+
+    report_missing(datasets["boe_interest_rates"])
 
     assess_data(datasets)
     return
@@ -54,14 +59,14 @@ def main():
 #open data, and return 
 def openData(fileName):
     #check for folder, and files inside
-    filePath = fileName + ".csv"
+    filePath = DS_FOLDER / f"{fileName}.csv"
     print("Opening: " + fileName)
     dataset_raw = load_data(filePath)
 
     #confirm dataset loads
     dataset_raw.head(1)
-    dataset = sanitise(dataset_raw)
-    report_missing(dataset)
+    #dataset = sanitise(dataset_raw)
+    #report_missing(dataset)
 
     print(f"Opened successfully: {filePath}")
     #handle how to assess null values
@@ -70,8 +75,16 @@ def openData(fileName):
 def assess_data(datasets):
     for data in datasets:
         datasets[data].info()
-        
+
     return
+
+def push_to_SQL(df: pd.DataFrame) -> None:
+    try:
+        print("hello world")
+
+    except Exception as ex:
+        print(f"Error: {ex}")
+        sys.exit(1)
 
 #output sql data to a text file
 def analytics_handler():
