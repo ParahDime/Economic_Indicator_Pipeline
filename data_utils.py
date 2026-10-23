@@ -43,3 +43,15 @@ def sanitise(df: pd.DataFrame) -> pd.DataFrame:
 def report_missing(df: pd.DataFrame) -> pd.Series:
     #view nulls by column
     return df.isna().sum().sort_values(ascending=False)
+
+def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
+    #remove columns older than 01/01/2000
+
+    #other column missing, avg previous and future 7 days
+    return
+
+def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
+    return
+
+def clean_ons(df: pd.DataFrame) -> pd.DataFrame:
+    return
