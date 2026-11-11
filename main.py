@@ -1,9 +1,10 @@
 from pathlib import Path
 import sqlite3
 import pandas as pd
+import matplotlib.pyplot as plt
 import sys
 
-from data_utils import load_data, sanitise, report_missing, clean_ftse, clean_ons, clean_boe
+from data_utils import load_data, report_missing, clean_ftse, clean_ons, clean_boe
 #from sql_utils
 
 DB_FOLDER = Path("databases")
@@ -11,6 +12,8 @@ DB_FOLDER.mkdir(parents=True, exist_ok=True)
 
 DS_FOLDER = Path("datasets")
 DS_FOLDER.mkdir(parents=True, exist_ok=True)
+
+DB = "economic_view.db"
 
 
 
@@ -46,14 +49,15 @@ def main():
         datasets[clean_name] = openData(path)
 
     #clean the data
-    datasets["ftse100_daily_history"] = clean_ftse(datasets["ftse100_daily_history"])
-    datasets["boe_interest_rates"] = clean_boe(datasets["boe_interest_rates"])
-    datasets["staging_ons_cpi_clean"] = clean_ons(datasets["staging_ons_cpi_clean"])
+    datasets["ftse100_daily_history"] = clean_ftse(datasets["ftse100"])
+    datasets["boe_interest_rates"] = clean_boe(datasets["interest_rates"])
+    datasets["staging_ons_cpi_clean"] = clean_ons(datasets["cpi"])
 
     report_missing(datasets["boe_interest_rates"])
 
     assess_data(datasets)
     return
+
 
 #open data, and return 
 def openData(fileName):
@@ -69,7 +73,7 @@ def openData(fileName):
 
     print(f"Opened successfully: {filePath}")
     #handle how to assess null values
-    return
+    return dataset_raw
 
 def assess_data(datasets):
     for data in datasets:
@@ -99,4 +103,7 @@ def analytics_handler():
     print("hello world")
     return
 
-main()
+
+
+if __name__ == "__main__":
+    main()

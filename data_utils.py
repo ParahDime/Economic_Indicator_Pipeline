@@ -30,7 +30,7 @@ def report_missing(df: pd.DataFrame) -> pd.Series:
 def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
     try:
         #Standardise data
-        df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
         
         #Remove whitespace for handling
         str_cols = df.select_dtypes(include="object").columns
@@ -39,8 +39,8 @@ def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
         df = df.dropna(how="all").dropna(axis=1, how="all")
         df = df.drop_duplicates()
 
-        df["date changed"] = pd.to_datetime(df["date changed"], errors="coerce", dayfirst=True)
-        df = df[df["Date"] >= "2000-01-01"] #keep only data necessary
+        df["date"] = pd.to_datetime(df["date"], errors="coerce", dayfirst=True)
+        df = df[df["date"] >= "2000-01-01"] #keep only data necessary
         
         #other column missing, avg previous and future 7 days
 
@@ -54,7 +54,7 @@ def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
 def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
     try:
         #Standardise data
-        df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
             
         #Remove whitespace for handling
         str_cols = df.select_dtypes(include="object").columns
@@ -64,9 +64,9 @@ def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
         df = df.drop_duplicates()
 
         #ensure data is only taken after 1st jan 2000
-        df["date changed"] = pd.to_datetime(df["date changed"], errors="coerce", dayfirst=True)
-        df = df[df["date changed"] >= "2000-01-01"] #keep only data necessary
-            
+        df["date"] = pd.to_datetime(df["date_changed"], errors="coerce", dayfirst=True)
+        df = df[df["date"] >= "2000-01-01"] #keep only data necessary
+        df = df.drop(columns=["date_changed"], errors="ignore")
             #other column missing, avg previous and future 7 days
     
         return df
