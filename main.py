@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
+import os
 
 from data_utils import load_data, report_missing, clean_ftse, clean_ons, clean_boe
 #from sql_utils
@@ -83,7 +84,42 @@ def assess_data(datasets):
 
 def push_to_SQL(df: pd.DataFrame) -> None:
     try:
-        print("hello world")
+        #define location before creating files
+        db_dir = os.path.join(base, "databases")
+        os.makedirs(db_dir, exist_ok=True)
+
+        base = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(db_dir, "directory.db")
+        sql_path = os.path.join(db_dir, "directory.sql")
+        if not path:
+            return
+
+        if os.path.exists(path):
+            os.remove(path)
+        conn = sqlite3.connect(path)
+        conn.execute("""CREATE TABLE IF NOT EXISTS ftse100 (
+                date  TEXT PRIMARY KEY,   -- ISO 'YYYY-MM-DD' so text sorts and compares correctly
+                open  REAL, high REAL,
+                close REAL, change REAL
+            );
+            CREATE TABLE IF NOT EXISTS interest_rates (
+                date TEXT PRIMARY KEY,    -- date the rate changed
+                rate REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS cpi (
+                date            TEXT PRIMARY KEY,  -- first day of the month
+                cpi_annual_rate REAL NOT NULL
+            );
+
+            -- FTSE trading days with the latest known rate and CPI on or before each day
+            CREATE VIEW IF NOT EXISTS v_daily AS
+            SELECT f.date, f.close,
+                (SELECT rate FROM interest_rates b WHERE b.date <= f.date
+                ORDER BY b.date DESC LIMIT 1) AS bank_rate,
+                (SELECT cpi_annual_rate FROM cpi c WHERE c.date <= f.date
+                ORDER BY c.date DESC LIMIT 1) AS cpi_annual_rate
+            FROM ftse100 f;
+            """)
 
     except Exception as ex:
         print(f"Error: {ex}")

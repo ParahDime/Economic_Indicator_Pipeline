@@ -78,7 +78,20 @@ def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
 
 def clean_ons(df: pd.DataFrame) -> pd.DataFrame:
     try:
-        print("n")
+        df = df.rename(columns={df.columns[0]: "period"})
+        #remove all rows < 2000
+        #keep row CPI ANNUAL RATE 00: ALL ITEMS 2015=100
+        codes = df[df["period"] == "CDID"].iloc[0]  # the metadata row listing each series code
+        col = codes[codes == "D7G7"].index[0]
+
+        df = df[["period", col]]
+        df.columns = ["period", "cpi_annual_rate"]
+
+        df = df[df["period"].str.match(r"^\d{4} [A-Z]{3}$", na=False)].copy()
+
+        df["date"] = pd.to_datetime(df["period"], format="%Y %b")  # "2024 JAN" -> 2024-01-01
+        df["cpi_annual_rate"] = pd.to_numeric(df["cpi_annual_rate"], errors="coerce")
+        return df.drop(columns="period").dropna()
     except Exception as ex:
         print(f"Error: {ex}")
         sys.exit()
