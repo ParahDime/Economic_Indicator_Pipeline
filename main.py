@@ -18,8 +18,8 @@ DB = "economic_view.db"
 
 SCHEMA = """CREATE TABLE IF NOT EXISTS ftse100 (
                 date  TEXT PRIMARY KEY,   -- ISO 'YYYY-MM-DD' so text sorts and compares correctly
-                open  REAL, high REAL,
-                close REAL, change REAL
+                open  REAL, high REAL, low REAL, 
+                close REAL
             );
             CREATE TABLE IF NOT EXISTS interest_rates (
                 date TEXT PRIMARY KEY,    -- date the rate changed
@@ -62,7 +62,7 @@ def main():
     }
 
     datasets = {}
-
+    #each name mapped for easier reading
     for path in file_paths:
         #get name for file to be accessed
         raw_key = Path(path).stem
@@ -71,17 +71,11 @@ def main():
         clean_name = name_mapping.get(raw_key, raw_key)
         datasets[clean_name] = openData(path)
 
-    #clean the data
+    #data is cleaned and assigned a variable
     datasets["ftse100_daily_history"] = clean_ftse(datasets["ftse100"])
     datasets["boe_interest_rates"] = clean_boe(datasets["interest_rates"])
-    print(datasets["boe_interest_rates"].columns.tolist())
     datasets["staging_ons_cpi_clean"] = clean_ons(datasets["cpi"])
-
     
-      # exact header names, including any hidden characters
-    print(datasets["boe_interest_rates"].head(3))
-    
-
     report_missing(datasets["boe_interest_rates"])
 
     assess_data(datasets)
@@ -91,13 +85,14 @@ def main():
     db_dir = os.path.join(base, "databases")
     os.makedirs(db_dir, exist_ok=True)
     
-    
     db_path = os.path.join(db_dir, "directory.db")
     build_sql(db_path, datasets["ftse100_daily_history"], datasets["boe_interest_rates"], datasets["staging_ons_cpi_clean"])
+    
+    report = assess_db(db_path)
     return
 
 
-#open data, and return 
+#soft check if file can be found
 def openData(fileName):
     #check for folder, and files inside
     filePath = DS_FOLDER / f"{fileName}.csv"
@@ -106,8 +101,6 @@ def openData(fileName):
 
     #confirm dataset loads
     dataset_raw.head(1)
-    #dataset = sanitise(dataset_raw)
-    #report_missing(dataset)
 
     print(f"Opened successfully: {filePath}")
     #handle how to assess null values
@@ -118,82 +111,98 @@ def assess_data(datasets):
         datasets[data].info()
     return
 
+#construct the database as a .db file
 def build_sql(db_path, ftse: pd.DataFrame, boe: pd.DataFrame, cpi: pd.DataFrame) -> None:
-    ftse = ftse.copy()                                    # don't mutate the caller's frame
-    ftse["date"] = pd.to_datetime(ftse["date"], dayfirst=True)  # make sure it's real datetimes (UK format)
-    ftse = ftse.sort_values("date")                       # oldest first so shift(-1) means "next trading day"
-    ftse["close"] = ftse["open"].shift(-1)                # next day's open stands in for today's close
+    ftse = ftse.copy()
+    ftse["date"] = pd.to_datetime(ftse["date"], dayfirst=True)
+    ftse = ftse.sort_values("date") #go by oldest first
+    ftse["close"] = ftse["open"].shift(-1) #define closing value
 
-    with sqlite3.connect(db_path) as con:                 # one connection, commits on success
-        con.executescript(SCHEMA)                         # create tables and view if missing
+    #ensure values are strings for reading and manipulating data
+    price_cols = ["open", "high", "low", "close"]
+    for col in price_cols:
+        ftse[col] = pd.to_numeric(ftse[col].astype(str).str.replace(",", ""), errors="coerce")
+
+    #construct the .db file
+    with sqlite3.connect(db_path) as con:
+        con.executescript(SCHEMA)
 
         def write(table, frame, cols):
-            out = frame[cols].copy()                      # keep only schema columns
-            out["date"] = pd.to_datetime(out["date"]).dt.strftime("%Y-%m-%d")  # ISO text for sqlite
-            con.execute(f"DELETE FROM {table}")           # clear old rows so reruns are safe
-            out.to_sql(table, con, if_exists="append", index=False)  # append keeps the primary key
+            out = frame[cols].copy()
+            out["date"] = pd.to_datetime(out["date"]).dt.strftime("%Y-%m-%d")  #ISO text for sqlite
+            con.execute(f"DELETE FROM {table}")
+            out.to_sql(table, con, if_exists="append", index=False)
 
-        write("ftse100", ftse, ["date", "open", "high", "close"])
+        #write to each table of the database, corresponding to each dataset
+        write("ftse100", ftse, ["date", "open", "high", "low", "close"])
         write("interest_rates", boe, ["date", "rate"])
         write("cpi", cpi, ["date", "cpi_annual_rate"])
     return
 
-def create_SQL(df: pd.DataFrame, path) -> None:
-    try:
-        #define location before creating files
-        db_dir = os.path.join(base, "databases")
-        os.makedirs(db_dir, exist_ok=True)
-
-        base = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(db_dir, "directory.db")
-        sql_path = os.path.join(db_dir, "directory.sql")
-        if not path:
-            return
-
-        if os.path.exists(path):
-            os.remove(path)
-        conn = sqlite3.connect(path)
-        conn.execute("""CREATE TABLE IF NOT EXISTS ftse100 (
-                date  TEXT PRIMARY KEY,   -- ISO 'YYYY-MM-DD' so text sorts and compares correctly
-                open  REAL, high REAL,
-                close REAL, change REAL
-            );
-            CREATE TABLE IF NOT EXISTS interest_rates (
-                date TEXT PRIMARY KEY,    -- date the rate changed
-                rate REAL NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS cpi (
-                date            TEXT PRIMARY KEY,  -- first day of the month
-                cpi_annual_rate REAL NOT NULL
-            );
-
-            -- FTSE trading days with the latest known rate and CPI on or before each day
-            CREATE VIEW IF NOT EXISTS v_daily AS
-            SELECT f.date, f.close,
-                (SELECT rate FROM interest_rates b WHERE b.date <= f.date
-                ORDER BY b.date DESC LIMIT 1) AS bank_rate,
-                (SELECT cpi_annual_rate FROM cpi c WHERE c.date <= f.date
-                ORDER BY c.date DESC LIMIT 1) AS cpi_annual_rate
-            FROM ftse100 f;
-            """)
-
-    except Exception as ex:
-        print(f"Error: {ex}")
-        sys.exit(1)
-
 #output sql data to a text file
-def analytics_handler():
-    #ask user for use: report, sql file, .vb file
-    print("Select an option: Report, vb file, none")
-    #check folder
+def assess_db(db_path) -> pd.DataFrame:
+    results = []  # collects (check, status, detail) rows
 
-    #open folder
+    def add(check, ok, detail="", level="FAIL"):
+        # ok -> "OK", otherwise the severity passed in (FAIL or WARN)
+        results.append((check, "OK" if ok else level, detail))
 
-    #basics
+    with sqlite3.connect(db_path) as con:
+        q = lambda sql: pd.read_sql(sql, con)  # shorthand for running a query
 
-    #sql write
-    print("hello world")
-    return
+        # --- per-table basics: row count, date range ---
+        for t in ["ftse100", "interest_rates", "cpi"]:
+            r = q(f"SELECT COUNT(*) n, MIN(date) lo, MAX(date) hi FROM {t}").iloc[0]
+            add(f"{t}: has rows", r.n > 0, f"{r.n} rows, {r.lo} to {r.hi}")
+
+        # --- FTSE checks ---
+        f = q("SELECT * FROM ftse100 ORDER BY date")
+        f["date"] = pd.to_datetime(f["date"])
+
+        nulls = f[["open", "high", "low"]].isna().sum().sum()
+        add("ftse: no null open/high/low", nulls == 0, f"{nulls} nulls")
+
+        n_close = f["close"].isna().sum()
+        add("ftse: only last close is null", n_close <= 1, f"{n_close} null closes", "WARN")
+
+        bad_hl = (f["high"] < f["low"]).sum()
+        add("ftse: high >= low", bad_hl == 0, f"{bad_hl} rows violate")
+
+        print(f.dtypes)                      # open should be float64, not object
+        print(f["open"].head())
+
+        moves = f["open"].pct_change().abs()  # day-to-day change in open
+        big = (moves > 0.10).sum()
+        add("ftse: no >10% daily moves", big == 0, f"{big} large moves (check for parse errors)", "WARN")
+
+        gaps = f["date"].diff().dt.days.gt(5).sum()  # >5 days = more than a weekend + bank holiday
+        add("ftse: no gaps >5 days", gaps == 0, f"{gaps} gaps", "WARN")
+
+        age = (pd.Timestamp.today().normalize() - f["date"].max()).days
+        add("ftse: data is fresh", age <= 5, f"latest is {age} days old", "WARN")
+
+        # --- BoE checks ---
+        b = q("SELECT * FROM interest_rates")
+        add("boe: rate in 0-20%", b["rate"].between(0, 20).all(),
+            f"min {b['rate'].min()}, max {b['rate'].max()}")
+
+        # --- CPI checks ---
+        c = q("SELECT * FROM cpi ORDER BY date")
+        c["date"] = pd.to_datetime(c["date"])
+        expected = pd.date_range(c["date"].min(), c["date"].max(), freq="MS")  # every month start
+        missing = len(expected) - len(c)
+        add("cpi: no missing months", missing == 0, f"{missing} months missing", "WARN")
+
+        # --- joined view: do the as-of lookups find a value? ---
+        v = q("SELECT * FROM v_daily")
+        for col in ["bank_rate", "cpi_annual_rate"]:
+            n = v[col].isna().sum()
+            add(f"view: {col} filled on every day", n == 0, f"{n} null days", "WARN")
+
+    report = pd.DataFrame(results, columns=["check", "status", "detail"])
+    print(report.to_string(index=False))                        # readable summary
+    print("\n", report["status"].value_counts().to_dict())      # e.g. {'OK': 12, 'WARN': 2}
+    return report 
 
 
 

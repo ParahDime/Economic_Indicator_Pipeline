@@ -41,7 +41,8 @@ def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
 
         df["date"] = pd.to_datetime(df["date"], errors="coerce", dayfirst=True)
         df = df[df["date"] >= "2000-01-01"] #keep only data necessary
-        
+        df = df.drop(columns=["vol."], errors="ignore")
+
         #other column missing, avg previous and future 7 days
 
         return df
