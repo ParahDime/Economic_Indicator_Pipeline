@@ -54,6 +54,7 @@ def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
 
 def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
     try:
+        #EDIT: if < 1999, delete (i.e. more than current year)
         #Standardise data
         df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
             

@@ -141,16 +141,16 @@ def build_sql(db_path, ftse: pd.DataFrame, boe: pd.DataFrame, cpi: pd.DataFrame)
 
 #output sql data to a text file
 def assess_db(db_path) -> pd.DataFrame:
-    results = []  # collects (check, status, detail) rows
+    results = []
 
     def add(check, ok, detail="", level="FAIL"):
-        # ok -> "OK", otherwise the severity passed in (FAIL or WARN)
+        #Ok, warn or fail as options
         results.append((check, "OK" if ok else level, detail))
 
     with sqlite3.connect(db_path) as con:
-        q = lambda sql: pd.read_sql(sql, con)  # shorthand for running a query
+        q = lambda sql: pd.read_sql(sql, con) #lambda function for querying
 
-        # --- per-table basics: row count, date range ---
+        #get the date ranges
         for t in ["ftse100", "interest_rates", "cpi"]:
             r = q(f"SELECT COUNT(*) n, MIN(date) lo, MAX(date) hi FROM {t}").iloc[0]
             add(f"{t}: has rows", r.n > 0, f"{r.n} rows, {r.lo} to {r.hi}")
@@ -168,40 +168,40 @@ def assess_db(db_path) -> pd.DataFrame:
         bad_hl = (f["high"] < f["low"]).sum()
         add("ftse: high >= low", bad_hl == 0, f"{bad_hl} rows violate")
 
-        print(f.dtypes)                      # open should be float64, not object
-        print(f["open"].head())
-
-        moves = f["open"].pct_change().abs()  # day-to-day change in open
+        #day to day changes
+        moves = f["open"].pct_change().abs()
         big = (moves > 0.10).sum()
         add("ftse: no >10% daily moves", big == 0, f"{big} large moves (check for parse errors)", "WARN")
 
-        gaps = f["date"].diff().dt.days.gt(5).sum()  # >5 days = more than a weekend + bank holiday
+        #detects if weekend / bank hol included
+        gaps = f["date"].diff().dt.days.gt(5).sum() 
         add("ftse: no gaps >5 days", gaps == 0, f"{gaps} gaps", "WARN")
 
         age = (pd.Timestamp.today().normalize() - f["date"].max()).days
         add("ftse: data is fresh", age <= 5, f"latest is {age} days old", "WARN")
 
-        # --- BoE checks ---
+        #BOE, check interest rate
         b = q("SELECT * FROM interest_rates")
         add("boe: rate in 0-20%", b["rate"].between(0, 20).all(),
             f"min {b['rate'].min()}, max {b['rate'].max()}")
 
-        # --- CPI checks ---
+        #CPI Consumer price index checks
         c = q("SELECT * FROM cpi ORDER BY date")
         c["date"] = pd.to_datetime(c["date"])
-        expected = pd.date_range(c["date"].min(), c["date"].max(), freq="MS")  # every month start
+        expected = pd.date_range(c["date"].min(), c["date"].max(), freq="MS")
         missing = len(expected) - len(c)
         add("cpi: no missing months", missing == 0, f"{missing} months missing", "WARN")
 
-        # --- joined view: do the as-of lookups find a value? ---
+        # check for null days (no values)
         v = q("SELECT * FROM v_daily")
         for col in ["bank_rate", "cpi_annual_rate"]:
             n = v[col].isna().sum()
             add(f"view: {col} filled on every day", n == 0, f"{n} null days", "WARN")
 
     report = pd.DataFrame(results, columns=["check", "status", "detail"])
-    print(report.to_string(index=False))                        # readable summary
-    print("\n", report["status"].value_counts().to_dict())      # e.g. {'OK': 12, 'WARN': 2}
+    #output summary
+    print(report.to_string(index=False))                        
+    print("\n", report["status"].value_counts().to_dict())
     return report 
 
 
