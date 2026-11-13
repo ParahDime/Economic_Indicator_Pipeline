@@ -54,7 +54,6 @@ def clean_ftse(df: pd.DataFrame) -> pd.DataFrame:
 
 def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
     try:
-        #EDIT: if < 1999, delete (i.e. more than current year)
         #Standardise data
         df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
             
@@ -67,7 +66,7 @@ def clean_boe(df: pd.DataFrame) -> pd.DataFrame:
 
         #ensure data is only taken after 1st jan 2000
         df["date"] = pd.to_datetime(df["date_changed"], errors="coerce", dayfirst=True)
-        df = df[df["date"] >= "2000-01-01"] #keep only data necessary
+        df = df[df["date"].between("2000-01-01", pd.Timestamp.today().normalize())] #keep only data necessary
         df = df.drop(columns=["date_changed"], errors="ignore")
 
         print(df.columns.tolist())
